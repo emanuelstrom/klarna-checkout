@@ -4,8 +4,12 @@ const { createOrder } = require('../../services/server/klarna');
 
 
 
-app.get('/', async function (req, res, next) {
-	const klarnaCheckout = await createOrder();
+app.get('/checkout/:cart_id', async function (req, res, next) {
+	
+	const cart_id = req.params.cart_id;
+	
+	const klarnaCheckout = await createOrder(cart_id);
+	
 	const html_snippet = klarnaCheckout.html_snippet;
 
 	res.render('checkout', {

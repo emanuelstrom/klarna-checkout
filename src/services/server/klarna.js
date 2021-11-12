@@ -1,5 +1,7 @@
 import fetch from 'node-fetch';
 
+
+const getCarts = require('../../static/carts')
 const BASE_URL = 'https://api.playground.klarna.com';
 
 
@@ -10,13 +12,40 @@ function getKlarnaAuth() {
     return auth;
 }
 
+
+
+function formatCart(currentCart) {
+    currentCart.forEach((cartItem) => {
+        cartItem.total_amount = cartItem.quantity * cartItem.unit_price;
+        cartItem.total_tax_amount = cartItem.total_amount - cartItem.total_amount * 10000 / (10000 + cartItem.tax_rate);
+    });
+    return currentCart;
+}
+
+
+
 // 1. Add async createOrder function that returns Klarna response.json()
 
 // 2. Add async retrieveOrder function that returns Klarna response.json()
 
 // 3. export createOrder and retrieveOrder below, and use them in api/client/index.js and api/client/confirmation.js
 
-async function createOrder(){
+async function createOrder(cart_id){
+
+    const currentCart = getCarts()[cart_id];
+    const formattedCart = formatCart(currentCart);
+    
+    let order_ammount = 0;
+    let order_tax_amount= 0;
+    
+
+    formattedCart.forEach((currentCartItem) =>{
+        order_ammount += currentCartItem.total_amount;
+        order_tax_amount += currentCartItem.total_tax_amount;
+    });
+
+
+    
     const method = "POST";
     const path = '/checkout/v3/orders';
     const auth = getKlarnaAuth();
@@ -30,25 +59,12 @@ async function createOrder(){
         "purchase_country": "SE",
         "purchase_currency": "SEK",
         "locale": "sv-SE",
-        "order_amount": 50000,
-        "order_tax_amount": 4545,
-        "order_lines": [
-            {
-                "type": "physical",
-                "reference": "19-402-USA",
-                "name": "Red T-Shirt",
-                "quantity": 5,
-                "quantity_unit": "pcs",
-                "unit_price": 10000,
-                "tax_rate": 1000,
-                "total_amount": 50000,
-                "total_discount_amount": 0,
-                "total_tax_amount": 4545
-            }
-            ],
+        "order_amount": order_ammount,
+        "order_tax_amount": order_tax_amount,
+        "order_lines": formattedCart,
         "merchant_urls": {
             "terms": "https://www.example.com/terms.html",
-            "checkout": "https://www.example.com/heckout.html",
+            "checkout": "https://www.example.com/checkout.html",
             "confirmation": "http://localhost:3000/confirmation?order_id={checkout.order.id}",
             "push": "https://www.example.com/api/push"
         }
@@ -56,22 +72,25 @@ async function createOrder(){
 
     const stringifiedJSONBody = JSON.stringify(body);
 
-    const response = 
+    const response = await fetch(BASE_URL+path, {
+        method, 
+        headers, 
+        "body": stringifiedJSONBody 
+    });
 
-        /**
-         *  MAKE THE REQUEST
-         */
-        await fetch(
-            BASE_URL+path, // URL 
-            {
-                method: method, // METHOD
-                headers: headers, // HEADERS (AUTH)
-                body: stringifiedJSONBody // BODY (DATA TO BE SENT
-            }
-        );
 
     const res = await response.json();
-    return res
+
+     // "200" is success from Klarna KCO docs
+    if (response.status === 200 || response.status === 201) {
+        return res
+    } else {
+        console.error("ERROR:", res)
+        return {
+            html_snippet: `<h1>${JSON.stringify(res)}</h1>`
+        }
+    }
+
 
 }
 
@@ -101,7 +120,16 @@ async function completedOrder(orderId){
         );
         
     const res = await response.json();
-    return res
+
+    if (response.status === 200 || response.status === 201) {
+        return res
+    } else {
+        console.error("ERROR: ", response.status, response.statusText);
+        return {
+            html_snippet: `<h1>${response.status} ${response.statusText}</h1>`
+        }
+    }
+
 }
 
 
